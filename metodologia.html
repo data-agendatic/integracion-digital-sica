@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Metodología — Integración digital regional en el SICA</title>
+  <meta name="description" content="Cómo se midió el enrutamiento de Internet entre los países del SICA: RIPE Atlas, Python y el criterio de clasificación de rutas.">
+  <link rel="stylesheet" href="css/estilo.css" />
+</head>
+<body>
+
+  <header class="hero">
+    <div class="wrap">
+      <div class="kicker">Metodología completa</div>
+      <h1>Cómo se midió el enrutamiento de Internet entre los países del SICA</h1>
+      <p class="lead">
+        <a href="index.html">&larr; Volver a los resultados</a>
+      </p>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <section id="fuentes">
+      <h2>1. Fuentes de datos reales</h2>
+      <p class="section-sub">Nada de esto es simulado: cada número sale de una medición real ejecutada en Internet.</p>
+      <div class="panel">
+        <p>
+          Las mediciones se obtuvieron de <strong>RIPE Atlas</strong>, la plataforma de medición distribuida que
+          opera RIPE NCC (el registro regional de Internet para Europa/Medio Oriente, uno de los cinco a nivel
+          mundial junto a LACNIC). RIPE Atlas funciona con miles de sondas y anclas físicas conectadas en redes
+          reales alrededor del mundo, y es una fuente estándar en estudios académicos de topología de Internet.
+        </p>
+        <p>
+          Se combinaron <strong>dos fuentes</strong> dentro de una misma ventana consistente (11 al 19 de julio
+          de 2026), para que ambas describan el mismo período:
+        </p>
+        <ul>
+          <li>
+            <strong>Malla de anclaje (anchoring mesh):</strong> RIPE Atlas mantiene, de forma continua y
+            gratuita, traceroutes periódicos entre sus anclas (equipos dedicados de alta estabilidad) en todo
+            el mundo. Se extrajeron únicamente los resultados donde tanto el origen como el destino son anclas
+            del SICA: Guatemala, El Salvador, Honduras, Costa Rica, Panamá y República Dominicana (6 países,
+            30 pares direccionales posibles entre ellos).
+          </li>
+          <li>
+            <strong>Malla propia:</strong> se crearon 42 mediciones recurrentes propias (traceroute IPv4, cada
+            6 horas durante 5 días) cubriendo los 7 países con nodo disponible × 6 destinos cada uno — la
+            única forma de incluir a Nicaragua, que no tiene ancla propia y depende de una sonda convencional.
+            Esto tuvo un costo real en créditos de la plataforma, aprobado explícitamente antes de ejecutarse.
+          </li>
+        </ul>
+        <p>
+          Belice no tiene ningún punto de observación (sonda o ancla) en RIPE Atlas al momento del estudio —
+          queda fuera del todo, no se rellenó con datos sintéticos ni estimaciones.
+        </p>
+        <p>
+          <strong>Corpus final:</strong> 363,373 saltos de traceroute individuales, agrupados en 15,244 corridas
+          reales, cubriendo los 42 pares de países alcanzables (de un universo teórico de 56 si se contaran los
+          8 países del bloque).
+        </p>
+      </div>
+    </section>
+
+    <section id="herramientas">
+      <h2>2. Herramientas y automatización</h2>
+      <p class="section-sub">Todo el pipeline es código propio en Python, pensado para poder repetirse.</p>
+      <div class="panel">
+        <p>
+          Todo el proceso — desde crear las mediciones hasta clasificar cada ruta — se automatizó en
+          <strong>Python 3</strong>, usando:
+        </p>
+        <ul>
+          <li><code>ripe.atlas.cousteau</code>: librería oficial de RIPE NCC para crear y detener mediciones de traceroute vía su API.</li>
+          <li><code>requests</code> contra la API pública de RIPEstat (<code>stat.ripe.net</code>): para resolver el país de registro real y el nombre de cada sistema autónomo (ASN) que aparece en cada salto.</li>
+          <li>Cachés persistentes en disco para esas resoluciones, de forma que un fallo de red momentáneo no cambie la clasificación de una ruta entre una corrida y otra.</li>
+        </ul>
+        <p>El pipeline completo, en cinco scripts secuenciales:</p>
+        <ol>
+          <li><code>01_get_probes.py</code> — identifica el ancla o sonda real de cada país SICA.</li>
+          <li><code>02_run_mesh.py</code> — calcula el presupuesto en créditos, y crea (o detiene) la malla propia de mediciones.</li>
+          <li><code>03_parse_bgp.py</code> — descarga los resultados de la malla propia y los correlaciona salto por salto con su ASN.</li>
+          <li><code>04_harvest_anchoring.py</code> — cosecha, sin costo, el histórico de la malla de anclaje para la misma ventana de fechas.</li>
+          <li><code>05_export_public.py</code> — clasifica cada corrida y exporta los datasets públicos y el resumen de este sitio.</li>
+        </ol>
+        <p>
+          Cada script es idempotente (se puede volver a correr sin duplicar datos ya procesados) y nunca
+          modifica los datos ya recolectados — cualquier reprocesamiento escribe archivos nuevos.
+        </p>
+      </div>
+    </section>
+
+    <section id="asn-sica">
+      <h2>3. ¿Cuándo un ASN "es del SICA"?</h2>
+      <p class="section-sub">No se asumió que solo nuestros propios nodos cuentan — se verificó cada ASN contra su registro real.</p>
+      <div class="panel">
+        <p>
+          Cada salto de un traceroute pasa por una red distinta, identificada por su <strong>ASN</strong> (el
+          número que identifica a un operador de Internet). Para saber si ese ASN pertenece a la región, se
+          consultó su <strong>país de registro real</strong> en el whois agregado por los Registros Regionales
+          de Internet — LACNIC para la mayoría de los países del bloque, ARIN para Belice — vía la API de
+          RIPEstat, filtrando por los ocho códigos de país del SICA (BZ, CR, SV, GT, HN, NI, PA, DO).
+        </p>
+        <p>
+          Se prefirió este criterio sobre la geolocalización por IP porque esta última es notoriamente
+          imprecisa sobre equipamiento de infraestructura de red (routers, enlaces troncales), a diferencia de
+          los registros administrativos de los RIR.
+        </p>
+      </div>
+    </section>
+
+    <section id="clasificacion">
+      <h2>4. Cómo se clasifica cada ruta</h2>
+      <p class="section-sub">Cuatro categorías, definidas antes de ver los resultados — no ajustadas después.</p>
+      <div class="panel">
+        <p>
+          Para cada corrida se calculó un <strong>RTT teórico directo</strong>: el tiempo que tardaría la señal
+          si viajara en línea recta, a la velocidad de propagación típica en fibra óptica (~200,000 km/s), más
+          un margen fijo de 2 ms de procesamiento en los equipos. La distancia se calculó de forma geodésica
+          (línea recta sobre la esfera terrestre) entre las coordenadas reales del nodo de origen y el de
+          destino.
+        </p>
+        <table class="pairs">
+          <thead>
+            <tr><th>Categoría</th><th>Se cumple cuando…</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge intra_sica">Intra-SICA</span></td>
+              <td>Ningún salto del camino pasa por un ASN fuera del SICA.</td>
+            </tr>
+            <tr>
+              <td><span class="badge external_regional">Tránsito regional</span></td>
+              <td>El camino sí pasa por un ASN externo, pero el RTT observado no se dispara — el operador probablemente lo cursó localmente.</td>
+            </tr>
+            <tr>
+              <td><span class="badge physical_exit">Salida física confirmada</span></td>
+              <td>El camino pasa por un ASN externo <strong>Y</strong> el RTT observado supera 3 veces el RTT teórico directo — evidencia real de que el tráfico salió físicamente lejos, no solo inferencia por el ASN.</td>
+            </tr>
+            <tr>
+              <td><span class="badge external_unknown">ASN externo (sin línea base)</span></td>
+              <td>Pasa por un ASN externo pero faltan coordenadas para calcular el RTT teórico de referencia.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="map-hint">
+          El multiplicador de 3&times; es una decisión metodológica explícita del proyecto (relativa a su propio
+          modelo de distancia), no un estándar universal de la literatura — se documenta así para que sea
+          auditable.
+        </p>
+      </div>
+    </section>
+
+    <section id="exclusiones">
+      <h2>5. Qué se excluyó y por qué</h2>
+      <div class="panel">
+        <ul>
+          <li>
+            <strong>Corridas domésticas (origen = destino):</strong> 163 corridas donde el país de origen y de
+            destino coinciden se excluyeron de las métricas regionales, por corresponder a pruebas de
+            calibración local y no a trayectos entre países.
+          </li>
+          <li>
+            <strong>Belice:</strong> excluido en su totalidad — no hay ningún punto de observación de RIPE
+            Atlas en el país al momento del estudio. Es una limitación declarada, no se intentó estimar con
+            datos sintéticos.
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="limitaciones">
+      <h2>6. Limitaciones declaradas</h2>
+      <div class="panel">
+        <ul>
+          <li>Cada país está representado, en la práctica, por un único punto de observación (una sola ancla o sonda) — no puede descartarse cierto sesgo asociado a las políticas de enrutamiento particulares de ese operador.</li>
+          <li>Nicaragua depende de una sonda convencional (no ancla) y solo participa de la malla propia — sus 6 pares tienen ~20 muestras cada uno, frente a hasta 500 en los pares entre anclas.</li>
+          <li>La ventana de medición cubre una semana (11-19 de julio de 2026): capta variabilidad de corto plazo, pero no permite inferir patrones estacionales.</li>
+          <li>Los resultados reflejan las rutas visibles desde los puntos de observación disponibles, no un inventario completo del tráfico comercial de la región.</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p class="methodology">
+        <a href="index.html">&larr; Volver a los resultados</a>
+      </p>
+      <div class="downloads">
+        <a href="data/dataset_corridas.csv" download>Descargar dataset por corrida (CSV)</a>
+        <a href="data/dataset_saltos.csv" download>Descargar dataset por salto — crudo (CSV)</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
