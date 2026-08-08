@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Integración digital regional en el SICA — enrutamiento de Internet</title>
+  <meta name="description" content="Medición empírica del enrutamiento de tráfico de Internet entre los 8 países del SICA, con RIPE Atlas y correlación BGP.">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/estilo.css" />
+</head>
+<body>
+
+  <header class="hero">
+    <div class="wrap">
+      <div class="kicker">SICA · SIECA · BCIE — Call for Papers 2026</div>
+      <h1>Integración digital regional en el SICA: una medición del enrutamiento de tráfico de Internet entre sus países miembros</h1>
+      <p class="lead">
+        ¿Cuánto tráfico entre países vecinos del SICA sale físicamente de la región antes de volver a entrar?
+        Este sitio resume los resultados de <span id="periodo-txt">una campaña de mediciones reales</span> con sondas
+        RIPE Atlas y correlación BGP entre los 8 países del SICA.
+      </p>
+      <div class="stat-grid" id="stat-grid">
+        <div class="stat-card">
+          <div class="value exit" id="stat-tromboning-par">—</div>
+          <div class="label">Rutas con salida física confirmada (por par de países)</div>
+        </div>
+        <div class="stat-card">
+          <div class="value" id="stat-tromboning-corrida">—</div>
+          <div class="label">Corridas individuales con salida física confirmada</div>
+        </div>
+        <div class="stat-card">
+          <div class="value external" id="stat-dependencia">—</div>
+          <div class="label">Corridas regionales que transitan al menos un ASN externo</div>
+        </div>
+        <div class="stat-card">
+          <div class="value accent" id="stat-pares">—</div>
+          <div class="label">Pares de países medidos (de 42 posibles)</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <section id="explicacion">
+      <h2>¿Qué es el "tromboning"?</h2>
+      <p class="section-sub">
+        Si dos países son vecinos, uno esperaría que sus datos de Internet viajaran directo entre ellos.
+        Muchas veces no es así: el tráfico da un rodeo enorme por un país lejano antes de llegar. A eso le
+        llamamos <strong>"tromboning"</strong> (como un trombón: el sonido entra y sale por el mismo lado, pero
+        el camino en medio es mucho más largo de lo necesario).
+      </p>
+      <div class="panel">
+        <div class="diagram-compare">
+          <div class="diagram-example">
+            <div class="diagram-row">
+              <div class="diagram-box">Origen</div>
+              <div class="diagram-arrow ok">&#10142;</div>
+              <div class="diagram-box">Destino</div>
+            </div>
+            <p class="diagram-caption ok">Ruta directa (intra-SICA)<br>Lo esperable entre países vecinos.</p>
+          </div>
+          <div class="diagram-example">
+            <div class="diagram-row">
+              <div class="diagram-box">Origen</div>
+              <div class="diagram-arrow bad">&#10142;</div>
+              <div class="diagram-box far">País lejano</div>
+              <div class="diagram-arrow bad">&#10142;</div>
+              <div class="diagram-box">Destino</div>
+            </div>
+            <p class="diagram-caption bad">"Tromboning" (salida física confirmada)<br>El tráfico rodea medio mundo antes de llegar al vecino.</p>
+          </div>
+        </div>
+        <div class="glossary">
+          <div><strong>ASN:</strong> el "nombre" de la red de Internet de una empresa u operador (como un DNI, pero de una red).</div>
+          <div><strong>RTT:</strong> el tiempo (en milisegundos) que tarda un dato en ir y volver — mientras más alto, más lento.</div>
+          <div><strong>Salida física confirmada:</strong> el RTT medido es mucho más alto de lo que le tomaría ir directo Y el camino pasa por una red fuera del SICA — evidencia real, no solo sospecha.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="graficos">
+      <h2>En números</h2>
+      <p class="section-sub">
+        De las 42 rutas posibles entre países del SICA, así se reparten según su comportamiento real medido.
+      </p>
+      <div class="chart-grid">
+        <div class="panel">
+          <h3 class="chart-title">¿Cómo se reparten las 42 rutas?</h3>
+          <div id="chart-donut" class="chart-box"></div>
+        </div>
+        <div class="panel">
+          <h3 class="chart-title">¿Qué país "trombonea" más como origen?</h3>
+          <div id="chart-bar" class="chart-box"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="mapa">
+      <h2>Mapa de rutas SICA-SICA</h2>
+      <p class="section-sub">
+        Cada línea conecta un país de origen con un país de destino real medido. El color indica la categoría
+        dominante entre las corridas de ese par. Pasa el cursor sobre una línea o un nodo para ver el detalle.
+      </p>
+      <div class="panel">
+        <div class="map-controls">
+          <label><input type="checkbox" data-tier="intra_sica" checked> <span class="swatch intra"></span> Intra-SICA</label>
+          <label><input type="checkbox" data-tier="external_regional" checked> <span class="swatch external"></span> ASN externo (tránsito regional)</label>
+          <label><input type="checkbox" data-tier="physical_exit" checked> <span class="swatch exit"></span> Salida física confirmada</label>
+          <label><input type="checkbox" id="toggle-cables"> <span class="swatch cables"></span> Cables de fibra submarina</label>
+        </div>
+        <div id="map"></div>
+        <p class="map-hint">
+          Belice no tiene sonda RIPE Atlas propia (limitación declarada del estudio) — se muestra solo como referencia,
+          sin rutas medidas. Datos de cables submarinos: TeleGeography (submarinecablemap.com), uso informativo.
+        </p>
+      </div>
+    </section>
+
+    <section id="pares">
+      <h2>Los 42 pares medidos</h2>
+      <p class="section-sub">
+        Clasificación por par (unidad de análisis del estudio), con el número de corridas reales detrás de cada uno.
+        Haz clic en una fila para resaltar esa ruta en el mapa.
+      </p>
+      <div class="panel">
+        <div class="table-controls">
+          <input type="search" id="pair-search" placeholder="Buscar país de origen o destino...">
+        </div>
+        <div class="table-scroll">
+          <table class="pairs" id="pairs-table">
+            <thead>
+              <tr>
+                <th data-key="origin">Origen</th>
+                <th data-key="destination">Destino</th>
+                <th data-key="dominant_tier">Categoría</th>
+                <th data-key="dominant_pct">Consistencia</th>
+                <th data-key="n_samples">Corridas (n)</th>
+                <th data-key="avg_rtt_ms">RTT prom. (ms)</th>
+                <th data-key="distance_km">Distancia (km)</th>
+              </tr>
+            </thead>
+            <tbody id="pairs-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p class="methodology">
+        Medimos el camino real que siguen los datos entre países usando sondas de Internet (RIPE Atlas) y
+        clasificamos cada ruta según si se queda en la región o sale físicamente lejos.
+        <a href="metodologia.html">Ver metodología completa (fuentes, Python, RIPE Atlas, criterio de clasificación) &rarr;</a>
+      </p>
+      <div class="downloads">
+        <a href="data/dataset_corridas.csv" download>Descargar dataset por corrida (CSV)</a>
+        <a href="data/dataset_saltos.csv" download>Descargar dataset por salto — crudo (CSV)</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
